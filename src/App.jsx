@@ -195,6 +195,11 @@ function ProvidersPage() {
             <p><strong>Status:</strong> {selectedProvider.status}</p>
             <p><strong>Availability:</strong> {selectedProvider.availability_status}</p>
             <p><strong>Location:</strong> {selectedProvider.location || "Not set"}</p>
+            <p><strong>Has Shop in Zaria:</strong> {selectedProvider.has_shop_in_zaria ? "Yes" : "No"}</p>
+            <p><strong>Shop Address:</strong> {selectedProvider.shop_address || "Not set"}</p>
+            <p><strong>Passport Photo:</strong> {selectedProvider.passport_photo_path || "Not uploaded"}</p>
+            <p><strong>ID Document:</strong> {selectedProvider.id_document_path || "Not uploaded"}</p>
+            <p><strong>Skill Proof:</strong> {selectedProvider.skill_proof_path || "Not uploaded"}</p>
             <p><strong>Description:</strong> {selectedProvider.description || "No description"}</p>
 
             <StatusButtonGroup
@@ -290,6 +295,7 @@ function BookingsPage() {
             <p><strong>Date:</strong> {selectedBooking.scheduled_date}</p>
             <p><strong>Time:</strong> {selectedBooking.scheduled_time}</p>
             <p><strong>Description:</strong> {selectedBooking.service_description}</p>
+            <p><strong>Service Address:</strong> {selectedBooking.service_address || "No address saved"}</p>
             <p><strong>Resident Notes:</strong> {selectedBooking.notes || "No notes"}</p>
             <p><strong>Provider Notes:</strong> {selectedBooking.provider_notes || "No notes"}</p>
           </div>
