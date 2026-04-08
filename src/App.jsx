@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import {
+  createComplaintAction,
+  getComplaintActions,
+  getComplaintMessages,
   activateUser,
+  sendMessage,
   deactivateUser,
   getBookingDetails,
   getBookings,
@@ -308,11 +312,50 @@ function BookingsPage() {
 function ComplaintsPage() {
   const [complaints, setComplaints] = useState([]);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
+  const [complaintMessages, setComplaintMessages] = useState([]);
+  const [complaintActions, setComplaintActions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [status, setStatus] = useState("open");
   const [resolutionNote, setResolutionNote] = useState("");
+  const [messageText, setMessageText] = useState("");
+  const [activeConversation, setActiveConversation] = useState("resident");
+  const [actionType, setActionType] = useState("warning");
+  const [targetUserId, setTargetUserId] = useState("");
+  const [actionNote, setActionNote] = useState("");
+
+  const currentRecipient =
+    !selectedComplaint
+      ? null
+      : activeConversation === "provider"
+        ? {
+            role: "provider",
+            userId: selectedComplaint.provider.user.id,
+            name: selectedComplaint.provider.user.name
+          }
+        : {
+            role: "resident",
+            userId: selectedComplaint.user.id,
+            name: selectedComplaint.user.name
+          };
+
+  function getAdminMessageLabel(item) {
+    if (item.sender.role !== "admin") {
+      return item.sender.name;
+    }
+    return `admin(${item.recipient.name})`;
+  }
+
+  function getMessageTone(item) {
+    if (item.sender.role === "admin") {
+      return "conversation-bubble admin";
+    }
+    if (item.sender.role === "provider") {
+      return "conversation-bubble provider";
+    }
+    return "conversation-bubble resident";
+  }
 
   async function loadComplaints() {
     setLoading(true);
@@ -332,12 +375,26 @@ function ComplaintsPage() {
     }
   }
 
+  async function loadConversation(complaintId, counterpartUserId) {
+    const messages = await getComplaintMessages(complaintId, counterpartUserId);
+    setComplaintMessages(messages);
+  }
+
   async function handleSelectComplaint(complaintId) {
     try {
-      const data = await getComplaintDetails(complaintId);
+      const [data, actions] = await Promise.all([
+        getComplaintDetails(complaintId),
+        getComplaintActions(complaintId)
+      ]);
       setSelectedComplaint(data);
+      setComplaintActions(actions);
       setStatus(data.status);
       setResolutionNote(data.resolution_note || "");
+      setActiveConversation("resident");
+      setTargetUserId(String(data.provider.user.id));
+      setMessageText("");
+      setActionNote("");
+      await loadConversation(complaintId, data.user.id);
     } catch (err) {
       setError(err.message);
     }
@@ -346,6 +403,24 @@ function ComplaintsPage() {
   useEffect(() => {
     loadComplaints();
   }, []);
+
+  useEffect(() => {
+    if (!selectedComplaint || !currentRecipient) {
+      return undefined;
+    }
+
+    loadConversation(selectedComplaint.id, currentRecipient.userId).catch((err) => {
+      setError(err.message);
+    });
+
+    const timer = window.setInterval(() => {
+      loadConversation(selectedComplaint.id, currentRecipient.userId).catch((err) => {
+        setError(err.message);
+      });
+    }, 15000);
+
+    return () => window.clearInterval(timer);
+  }, [selectedComplaint?.id, currentRecipient?.userId]);
 
   async function handleUpdateComplaint() {
     if (!selectedComplaint) {
@@ -368,8 +443,49 @@ function ComplaintsPage() {
     }
   }
 
+  async function handleSendMessage() {
+    if (!selectedComplaint || !currentRecipient || !messageText.trim()) {
+      return;
+    }
+
+    setMessage("");
+    setError("");
+    try {
+      await sendMessage({
+        recipient_user_id: currentRecipient.userId,
+        complaint_id: selectedComplaint.id,
+        content: messageText.trim()
+      });
+      setMessage("Complaint message sent successfully.");
+      setMessageText("");
+      await loadConversation(selectedComplaint.id, currentRecipient.userId);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleCreateAction() {
+    if (!selectedComplaint) {
+      return;
+    }
+
+    setMessage("");
+    setError("");
+    try {
+      await createComplaintAction(selectedComplaint.id, {
+        action_type: actionType,
+        target_user_id: targetUserId ? Number(targetUserId) : null,
+        note: actionNote.trim() || null
+      });
+      setMessage("Complaint action saved successfully.");
+      await handleSelectComplaint(selectedComplaint.id);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
-    <section className="page-grid">
+    <section className="complaint-workspace">
       <div className="card">
         <div className="section-header">
           <h3>Complaints</h3>
@@ -429,7 +545,151 @@ function ComplaintsPage() {
             </label>
 
             <button onClick={handleUpdateComplaint}>Save Complaint Update</button>
+
+            <hr />
+
+            <label>
+              Action Type
+              <select value={actionType} onChange={(e) => setActionType(e.target.value)}>
+                <option value="warning">warning</option>
+                <option value="provider_suspension">provider_suspension</option>
+                <option value="account_deactivation">account_deactivation</option>
+                <option value="note">note</option>
+              </select>
+            </label>
+
+            <label>
+              Action Target
+              <select value={targetUserId} onChange={(e) => setTargetUserId(e.target.value)}>
+                <option value="">No target</option>
+                <option value={selectedComplaint.user.id}>
+                  Resident: {selectedComplaint.user.name}
+                </option>
+                <option value={selectedComplaint.provider.user.id}>
+                  Provider: {selectedComplaint.provider.user.name}
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Action Note
+              <textarea
+                rows="3"
+                value={actionNote}
+                onChange={(e) => setActionNote(e.target.value)}
+                placeholder="Add a short admin note or penalty reason..."
+              />
+            </label>
+
+            <button onClick={handleCreateAction}>Save Complaint Action</button>
+
+            <div className="details">
+              <p><strong>Action Log</strong></p>
+              {complaintActions.length ? (
+                complaintActions.map((item) => (
+                  <div key={item.id}>
+                    <p>
+                      <strong>{item.action_type}</strong>
+                      {item.target_user ? ` for ${item.target_user.name}` : ""}
+                    </p>
+                    <p>{item.note || "No note added."}</p>
+                  </div>
+                ))
+              ) : (
+                <p>No complaint actions yet.</p>
+              )}
+            </div>
           </div>
+        ) : null}
+      </div>
+
+      <div className="card conversation-stage">
+        <div className="section-header">
+          <h3>Conversation</h3>
+          {selectedComplaint ? (
+            <span className="conversation-chip">
+              Complaint #{selectedComplaint.id}
+            </span>
+          ) : null}
+        </div>
+
+        {!selectedComplaint ? <p>Select a complaint to open the conversation.</p> : null}
+
+        {selectedComplaint ? (
+          <>
+            <div className="conversation-audience">
+              <button
+                className={
+                  activeConversation === "resident"
+                    ? "audience-card resident active"
+                    : "audience-card resident"
+                }
+                onClick={() => {
+                  setActiveConversation("resident");
+                  setMessageText("");
+                }}
+              >
+                <strong>Chat with Resident</strong>
+                <span>{selectedComplaint.user.name}</span>
+              </button>
+              <button
+                className={
+                  activeConversation === "provider"
+                    ? "audience-card provider active"
+                    : "audience-card provider"
+                }
+                onClick={() => {
+                  setActiveConversation("provider");
+                  setMessageText("");
+                }}
+              >
+                <strong>Chat with Provider</strong>
+                <span>{selectedComplaint.provider.user.name}</span>
+              </button>
+            </div>
+
+            <div className="conversation-chip">
+              {currentRecipient
+                ? `Admin conversation with ${currentRecipient.name}`
+                : "Select a conversation"}
+            </div>
+
+            <div className="conversation-thread">
+              {complaintMessages.length ? (
+                complaintMessages.map((item) => (
+                  <article key={item.id} className={getMessageTone(item)}>
+                    <div className="conversation-head">
+                      <strong>{getAdminMessageLabel(item)}</strong>
+                      <span>{item.sender.role}</span>
+                    </div>
+                    <p>{item.content}</p>
+                  </article>
+                ))
+              ) : (
+                <p>No complaint messages yet.</p>
+              )}
+            </div>
+
+            <div className="conversation-composer">
+              <label>
+                Message
+                <textarea
+                  rows="5"
+                  value={messageText}
+                  onChange={(e) => setMessageText(e.target.value)}
+                  placeholder={
+                    currentRecipient
+                      ? `Write a message for ${currentRecipient.name}...`
+                      : "Select a conversation target..."
+                  }
+                />
+              </label>
+
+              <button onClick={handleSendMessage} disabled={!currentRecipient || !messageText.trim()}>
+                Send Message
+              </button>
+            </div>
+          </>
         ) : null}
       </div>
     </section>
