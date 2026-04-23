@@ -19,8 +19,107 @@ import {
   updateProviderStatus
 } from "./api";
 import { clearSession, getSavedUser, saveSession } from "./auth";
+import { API_BASE_URL } from "./config";
 
 const TABS = ["providers", "bookings", "complaints", "users"];
+
+function getMediaUrl(path) {
+  if (!path) {
+    return "";
+  }
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+  return `${API_BASE_URL}${path}`;
+}
+
+function isImageFile(path) {
+  return /\.(png|jpe?g|gif|webp|bmp)$/i.test(path || "");
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "Not available";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleString();
+}
+
+function MediaField({ label, path, alt }) {
+  if (!path) {
+    return (
+      <div>
+        <p><strong>{label}:</strong> Not uploaded</p>
+      </div>
+    );
+  }
+
+  const mediaUrl = getMediaUrl(path);
+  const image = isImageFile(path);
+
+  return (
+    <div>
+      <p><strong>{label}:</strong></p>
+      {image ? (
+        <a href={mediaUrl} target="_blank" rel="noreferrer">
+          <img
+            src={mediaUrl}
+            alt={alt || label}
+            style={{
+              width: "100%",
+              maxWidth: "240px",
+              maxHeight: "240px",
+              objectFit: "cover",
+              borderRadius: "12px",
+              border: "1px solid #d8dce5"
+            }}
+          />
+        </a>
+      ) : (
+        <p>
+          <a href={mediaUrl} target="_blank" rel="noreferrer">
+            Open {label}
+          </a>
+        </p>
+      )}
+      <p>
+        <small>{path}</small>
+      </p>
+    </div>
+  );
+}
+
+function ProfilePhoto({ path, name }) {
+  const photoUrl = getMediaUrl(path);
+
+  if (!path) {
+    return <p><strong>Profile Photo:</strong> Not uploaded</p>;
+  }
+
+  return (
+    <div>
+      <p><strong>Profile Photo:</strong></p>
+      <a href={photoUrl} target="_blank" rel="noreferrer">
+        <img
+          src={photoUrl}
+          alt={name || "Profile"}
+          style={{
+            width: "120px",
+            height: "120px",
+            objectFit: "cover",
+            borderRadius: "50%",
+            border: "1px solid #d8dce5"
+          }}
+        />
+      </a>
+    </div>
+  );
+}
 
 function LoginForm({ onLogin }) {
   const [email, setEmail] = useState("admin@zariaserviceconnect.com");
@@ -195,15 +294,34 @@ function ProvidersPage() {
             <p><strong>Name:</strong> {selectedProvider.user.name}</p>
             <p><strong>Email:</strong> {selectedProvider.user.email}</p>
             <p><strong>Phone:</strong> {selectedProvider.user.phone}</p>
+            <ProfilePhoto
+              path={selectedProvider.user.profile_photo}
+              name={selectedProvider.user.name}
+            />
             <p><strong>Service:</strong> {selectedProvider.service_name || selectedProvider.category?.name || "Not set"}</p>
             <p><strong>Status:</strong> {selectedProvider.status}</p>
             <p><strong>Availability:</strong> {selectedProvider.availability_status}</p>
             <p><strong>Location:</strong> {selectedProvider.location || "Not set"}</p>
+            <p><strong>User Location:</strong> {selectedProvider.user.location || "Not set"}</p>
             <p><strong>Has Shop in Zaria:</strong> {selectedProvider.has_shop_in_zaria ? "Yes" : "No"}</p>
             <p><strong>Shop Address:</strong> {selectedProvider.shop_address || "Not set"}</p>
-            <p><strong>Passport Photo:</strong> {selectedProvider.passport_photo_path || "Not uploaded"}</p>
-            <p><strong>ID Document:</strong> {selectedProvider.id_document_path || "Not uploaded"}</p>
-            <p><strong>Skill Proof:</strong> {selectedProvider.skill_proof_path || "Not uploaded"}</p>
+            <p><strong>Years of Experience:</strong> {selectedProvider.years_of_experience}</p>
+            <p><strong>Created:</strong> {formatDate(selectedProvider.created_at)}</p>
+            <MediaField
+              label="Passport Photo"
+              path={selectedProvider.passport_photo_path}
+              alt={`${selectedProvider.user.name} passport`}
+            />
+            <MediaField
+              label="ID Document"
+              path={selectedProvider.id_document_path}
+              alt={`${selectedProvider.user.name} ID document`}
+            />
+            <MediaField
+              label="Skill Proof"
+              path={selectedProvider.skill_proof_path}
+              alt={`${selectedProvider.user.name} skill proof`}
+            />
             <p><strong>Description:</strong> {selectedProvider.description || "No description"}</p>
 
             <StatusButtonGroup
@@ -793,7 +911,41 @@ function UsersPage() {
             <p><strong>Phone:</strong> {selectedUser.phone}</p>
             <p><strong>Role:</strong> {selectedUser.role}</p>
             <p><strong>Location:</strong> {selectedUser.location || "Not set"}</p>
+            <p><strong>Home Address:</strong> {selectedUser.home_address || "Not set"}</p>
             <p><strong>Status:</strong> {selectedUser.is_active ? "Active" : "Inactive"}</p>
+            <p><strong>Created:</strong> {formatDate(selectedUser.created_at)}</p>
+            <ProfilePhoto
+              path={selectedUser.profile_photo}
+              name={selectedUser.name}
+            />
+
+            {selectedUser.provider_profile ? (
+              <div className="details">
+                <p><strong>Provider Service:</strong> {selectedUser.provider_profile.service_name || selectedUser.provider_profile.category?.name || "Not set"}</p>
+                <p><strong>Provider Status:</strong> {selectedUser.provider_profile.status}</p>
+                <p><strong>Availability:</strong> {selectedUser.provider_profile.availability_status}</p>
+                <p><strong>Provider Location:</strong> {selectedUser.provider_profile.location || "Not set"}</p>
+                <p><strong>Years of Experience:</strong> {selectedUser.provider_profile.years_of_experience}</p>
+                <p><strong>Has Shop in Zaria:</strong> {selectedUser.provider_profile.has_shop_in_zaria ? "Yes" : "No"}</p>
+                <p><strong>Shop Address:</strong> {selectedUser.provider_profile.shop_address || "Not set"}</p>
+                <p><strong>Description:</strong> {selectedUser.provider_profile.description || "No description"}</p>
+                <MediaField
+                  label="Passport Photo"
+                  path={selectedUser.provider_profile.passport_photo_path}
+                  alt={`${selectedUser.name} passport`}
+                />
+                <MediaField
+                  label="ID Document"
+                  path={selectedUser.provider_profile.id_document_path}
+                  alt={`${selectedUser.name} ID document`}
+                />
+                <MediaField
+                  label="Skill Proof"
+                  path={selectedUser.provider_profile.skill_proof_path}
+                  alt={`${selectedUser.name} skill proof`}
+                />
+              </div>
+            ) : null}
 
             <div className="button-row">
               <button onClick={() => handleUserStatusChange("activate")}>Activate</button>
