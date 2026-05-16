@@ -166,9 +166,3 @@ npm run dev
 ```
 
 Then open the local Vite address shown in the terminal.
-
-## Defense Explanation
-
-You can say:
-
-"The admin dashboard is the management side of the system. Admin uses it to approve providers, view bookings, manage users, and resolve complaints. It talks to the same FastAPI backend, but the backend only allows admin users to access admin endpoints."
